@@ -1391,10 +1391,10 @@ def PlaybackInSafariOSx(url):
 		xbmc.log("Not running on darwin platform - aborting. PlaybackInSafariOSx can only be run on OSx since it depends on AppleScript ~ osascript")
 		return 
 	lib = os.path.join(ROOT_FOLDER,"resources","lib")
+	
 	xbmc.log("Launching Safari using AppleScript and starting maximized playback")
 	script = 'hbo_nordic_safari.scpt'
-	##TODO run signal on main thread to handle (ignore) child zombies
-	#signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+	
 	try:
 		hboProc = sp.Popen(['osascript', os.path.join(lib, script), url], stdout = sp.PIPE, stderr = sp.STDOUT)
 
@@ -1412,7 +1412,7 @@ def PlaybackInSafariOSx(url):
 	except OSError, e:
 		# Ignore, but log the error
 		if (e.strerror == "No child processes"):
-			xbmc.log("TODO: This error happens in subprocess (and popen2) modules in Python 2.4 - upgrade Python? - Errno: {0} - {1}".format(e.errno, e.strerror))
+			#xbmc.log("TODO: 'No child processes' happens in subprocess (and popen2) modules in Python 2.4 - patch or upgrade Python to get rid of it - [Errno: {0} - {1}]".format(e.errno, e.strerror))
 			pass
 		else:
 			raise e

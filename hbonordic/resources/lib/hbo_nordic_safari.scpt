@@ -1,5 +1,6 @@
---depends on cliclick to perform mouseclicks
+-- This script depends on cliclick to perform mouseclicks
 --	http://www.bluem.net/en/mac/cliclick/
+
 on run argv
 	set scriptfile to POSIX file (POSIX path of (path to me))
 	set scriptfilefolder to GetParentPath(scriptfile)
@@ -7,20 +8,6 @@ on run argv
 	set cliclickPath to scriptdir & "cliclick"
 	
 	set episodeUrl to item 1 of argv
-	(*
-	set argAvailable to true
-	try
-		get argv
-	on error
-		set argAvailable to false
-	end try
-	
-	if argAvailable then
-		set episodeUrl to item 1 of argv
-	else
-		log ("No argument set, falling back to deafult url")
-	end if
-	*)
 	log ("Loading episode url " & episodeUrl)
 	
 	-- Safari hack - wait for the page to be ready before executing rest of script
@@ -41,7 +28,7 @@ on run argv
 		end repeat
 		--	display dialog "Document ready"
 		
-		delay 3
+		delay 3 --TODO: Figure out when the player and episode scrolls into view
 		-- start playback
 		do JavaScript "var e = document.createEvent('MouseEvents');e.initMouseEvent('click', true, true, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);$('.js-play_button.play_button').get(0).dispatchEvent(e);" in document 1
 		
@@ -63,6 +50,7 @@ on run argv
 	set controlsIconHeight to 66 --Fixed size
 	set controlsVerticalDelimiter to 1 --Fixed size
 	
+	-- TODO: Detect what icons are available. Sometimes subtitles icon is not shown, which means the HD icon moves up a position
 	set volumeIconRightOffset to ((0 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
 	set fullscreenIconRightOffset to ((1 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
 	set subtitlesIconRightOffset to ((2 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
