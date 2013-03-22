@@ -1415,7 +1415,11 @@ def PlaybackInSafariOSx(url, user, password):
 			else:
 				xbmc.log("hbo_nordic_safari.scpt: {0}".format(line))
 				continue
-
+		if hboProc.returncode != 0:
+			xbmc.log("Script failed, see previous log statements for troubleshooting")
+		else:
+			xbmc.log("Done executing hbo_nordic_safari.scpt")
+		hboProc.kill()
 	except OSError, e:
 		# Ignore, but log the error
 		if (e.strerror == "No child processes"):
@@ -1424,7 +1428,7 @@ def PlaybackInSafariOSx(url, user, password):
 		else:
 			raise e
 	
-	xbmc.log("Done executing hbo_nordic_safari.scpt")
+
 
 
 def GetXbmcVersion():
