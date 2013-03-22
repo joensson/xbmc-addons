@@ -136,8 +136,9 @@ on run argv
 		activate
 		my info("Switching to HD stream")
 		-- Workaround: Some series does not have a subtitles icon - so the HD icon is offset 1 to the right - attempt click in both positions
-		do shell script quoted form of POSIX path of cliclickPath & " c:" & (screenHorizontalRes - subtitlesIconRightOffset) & "," & clickPosY --& " w:200 c:."
-		do shell script quoted form of POSIX path of cliclickPath & " c:" & (screenHorizontalRes - hdIconRightOffset) & "," & clickPosY --& " w:200 c:."
+		do shell script quoted form of POSIX path of cliclickPath & " m:" & (screenHorizontalRes - subtitlesIconRightOffset) & "," & clickPosY & " w:100 c:."
+		delay 0.5
+		do shell script quoted form of POSIX path of cliclickPath & " m:" & (screenHorizontalRes - hdIconRightOffset) & "," & clickPosY & " w:100 c:."
 	end tell
 	
 end run
