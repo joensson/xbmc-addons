@@ -1372,12 +1372,12 @@ def PlayUrl(url):
 		#p.wait()
 	else:
 		if(sys.platform=='darwin'):
-			PlaybackInSafariOSx(url)
+			PlaybackInSafariOSx(url, SETTINGS_USERNAME, SETTINGS_PASSWORD)
 		else:
 			xbmc.log("Launching Webbrowser")
 			webbrowser.open(url)
 			
-def PlaybackInSafariOSx(url):
+def PlaybackInSafariOSx(url, user, password):
 	"""
 	Depends on osascript (AppleScript) and the free cliclick binary (http://www.bluem.net/en/mac/cliclick/)
 	osascript must be able to load the script hbo_nordic_safari.scpt.
@@ -1395,8 +1395,15 @@ def PlaybackInSafariOSx(url):
 	xbmc.log("Launching Safari using AppleScript and starting maximized playback")
 	script = 'hbo_nordic_safari.scpt'
 	
+	#cliclick binary is expected to be executable, and for some reason XBMC removes the executable permission for the binary when installing from zip
+	cliclick_binary = os.path.join(lib, 'cliclick')
 	try:
-		hboProc = sp.Popen(['osascript', os.path.join(lib, script), url], stdout = sp.PIPE, stderr = sp.STDOUT)
+		os.chmod(cliclick_binary, 0755)
+	except Exception, e:
+		xbmc.log("Failed changing permissions on {0} {1}".format(cliclick_binary, e.strerror))
+	
+	try:
+		hboProc = sp.Popen(['osascript', os.path.join(lib, script), url, user, password], stdout = sp.PIPE, stderr = sp.STDOUT)
 
 		while True:
 			line = hboProc.stdout.readline()

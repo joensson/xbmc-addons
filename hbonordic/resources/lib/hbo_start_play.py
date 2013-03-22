@@ -2,7 +2,7 @@ import signal, os, subprocess as sp, sys
 
 
 
-def PlaybackInSafariOSx(url):
+def PlaybackInSafariOSx(url, user, password):
 	if(sys.platform != 'darwin'):
 		print "Not running on darwin platform - aborting. PlaybackInSafariOSx can only be run on OSx since it depends on AppleScript ~ osascript"
 		return 
@@ -11,16 +11,17 @@ def PlaybackInSafariOSx(url):
 	script = 'hbo_nordic_safari.scpt'
 
 	try:
-		hboProc = sp.Popen(['osascript', os.path.join(script_dir, script), url], stdout = sp.PIPE, stderr = sp.STDOUT)
+		hboProc = sp.Popen(['osascript', os.path.join(script_dir, script), url, user, password], stdout = sp.PIPE, stderr = sp.STDOUT)
 
 		while True:
 			line = hboProc.stdout.readline()
 			code = hboProc.poll()
-			print("hbo_nordic_safari.scpt: {0}".format(line))
+
 			if line == '':
 				if code != None:
 					break
 			else:
+				print("hbo_nordic_safari.scpt: {0}".format(line))
 				continue
 
 	except OSError, e:
@@ -32,6 +33,11 @@ def PlaybackInSafariOSx(url):
 			raise e
 	
 	print("Done executing hbo_nordic_safari.scpt")
+	return 0
 
 if __name__ == "__main__":
-	sys.exit(PlaybackInSafariOSx('http://hbonordic.com/series/-/-/a-day-in-the-life/seasons/1/1-richard-branson'))
+	args = sys.argv[1:]
+	if (len(args) != 3):
+		print "Needs 3 arguments - url, username, password"
+		sys.exit(1)
+	sys.exit(PlaybackInSafariOSx(args[0], args[1], args[2]))

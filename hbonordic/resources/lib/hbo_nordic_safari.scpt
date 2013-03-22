@@ -8,75 +8,137 @@ on run argv
 	set cliclickPath to scriptdir & "cliclick"
 	
 	set episodeUrl to item 1 of argv
-	log ("Loading episode url " & episodeUrl)
+	set username to item 2 of argv
+	set userpass to item 3 of argv
 	
-	-- Safari hack - wait for the page to be ready before executing rest of script
-	tell application "Safari"
-		activate
-		delay 1
-		set the URL of the front document to episodeUrl
-		repeat
-			-- use Safari's 'do JavaScript' to check a page's status
-			if (do JavaScript "document.readyState" in document 1) is "complete" then exit repeat
-			delay 1 -- wait a second before checking again
-		end repeat
-		delay 1
-		repeat
-			-- Wait for play button to be available
-			if (do JavaScript "typeof __hboPlayerProxy" in document 1) is not "undefined" then exit repeat
-			delay 1 -- wait a second before checking again
-		end repeat
-		--	display dialog "Document ready"
-		
-		delay 3 --TODO: Figure out when the player and episode scrolls into view
-		-- start playback
-		do JavaScript "var e = document.createEvent('MouseEvents');e.initMouseEvent('click', true, true, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);$('.js-play_button.play_button').get(0).dispatchEvent(e);" in document 1
-		
-		-- acquire playback controls coordinates (screen) and store them in menuPos
-		set menuPos to do JavaScript "var menuPos = function () { var menuX = window.screenX + $('.js-play_button.play_button')[0].getBoundingClientRect().left; var menuY = window.screenY + window.screen.availTop + (window.screen.height - window.screen.availHeight) + $('.js-play_button.play_button')[0].getBoundingClientRect().top + $('.js-play_button.play_button')[0].getBoundingClientRect().height; return {x: menuX, y: menuY, width: $('.js-play_button.play_button')[0].getBoundingClientRect().width};}; menuPos();" in document 1
-	end tell
+	-- Get display resolution
+	set res to GetResolution()
+	set screenHorizontalRes to item 3 in res
+	set screenVerticalRes to item 4 in res
 	
-	--TODO: To stop playback call javascript __hboPlayerProxy("complete")
-	
-	set menuPosX to get x of menuPos as integer
-	set menuPosY to get y of menuPos as integer
-	set playerWidth to get width of menuPos as integer
-	
-	--TODO: figure out a smarter way to wait for spinner to disappear and playback to start - javascript maybe?
-	delay 5
-	
-	-- Magic constant TODO: Figure out a failsafe way to get playback controls coordinates
 	set controlsIconWidth to 66 --Fixed size
 	set controlsIconHeight to 66 --Fixed size
 	set controlsVerticalDelimiter to 1 --Fixed size
 	
-	-- TODO: Detect what icons are available. Sometimes subtitles icon is not shown, which means the HD icon moves up a position
-	set volumeIconRightOffset to ((0 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
-	set fullscreenIconRightOffset to ((1 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
-	set subtitlesIconRightOffset to ((2 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
-	set hdIconRightOffset to ((3 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
 	
-	set clickPosY to menuPosY - (0.5 * controlsIconHeight)
+	debug("Loading episode url " & episodeUrl)
 	
-	set fullscreenIconOffset to (menuPosX + playerWidth - fullscreenIconRightOffset) as integer
-	log "Fullscreen icon offset: " & fullscreenIconOffset
-	
-	--Going fullscreen
-	log "Going fullscreen"
-	tell application "Safari" to activate
-	do shell script quoted form of POSIX path of cliclickPath & " m:" & fullscreenIconOffset & "," & clickPosY & " w:500 c:."
-	set fullscreen to true
-	
-	set res to GetResolution()
-	set screenHorizontalRes to item 3 in res
-	set screenVerticalRes to item 4 in res
-	set clickPosY to screenVerticalRes - (0.5 * controlsIconHeight)
-	
+	-- Close existing tabs on HBO Nordic
+	tell application "Safari"
+		reopen
+		set hboNordicTabTitle to "HBO Nordic" as string
+	    close (every tab of window 1 whose name is equal to hboNordicTabTitle)
+	end tell
 	delay 1
 	
-	log "Switching to HD stream"
-	--tell application "Safari" to activate
-	do shell script quoted form of POSIX path of cliclickPath & " c:" & (screenHorizontalRes - hdIconRightOffset) & "," & clickPosY --& " w:200 c:."
+	-- wait for the page to be ready before executing rest of script
+	tell application "Safari"
+		reopen
+		activate
+	    tell (window 1 where (its document is not missing value))
+    	    if name of its document is not "Untitled" then set current tab to (make new tab)
+        	set index to 1
+	    end tell
+    	set URL of document 1 to episodeUrl
+--		set the URL of the front document to episodeUrl
+		delay 2 --TODO: Is there an event we can check to see when Safari starts loading the new URL. If we check document.readyState too soon the 'old' page will return complete and the script will continue before the new page is loaded
+
+		my debug("Waiting for Safari to finish loading episode URL")
+		set startTime to (get current date)
+		repeat
+			if (do JavaScript "document.readyState" in document 1) is "complete" then exit repeat
+			delay 1
+		end repeat
+		set duration to (get current date) - startTime
+		my debug("Waited " & duration & " seconds for readyState to be 'complete'")
+		
+		--Login if not logged in already
+		if (do JavaScript "$('.js-toggle_login_form').length" in document 1) is 1 then
+			my debug("Logging in")
+			do JavaScript "var doLogin = function() {$('.js-toggle_login_form')[0].click(); $('#login_email')[0].value='" & username & "'; $('#login_password')[0].value='" & userpass & "'; $('#sign_in_form').submit();}; doLogin();" in document 1
+			delay 1
+		end if
+
+	end tell
+	tell application "System Events" to tell process "Safari"
+	    perform action "AXRaise" of window 1
+	end tell
+
+	tell application "Safari"
+		activate
+		my debug("Wait for browser to scroll to play icon")
+		set startTime to (get current date)
+		repeat
+			if (do JavaScript "var isScrolledIntoView = function(elem) { var docViewTop = $(window).get(0).pageYOffset; var docViewBottom = docViewTop + $(window).height(); var elemTop = $(elem).offset().top; var elemBottom = elemTop + $(elem).height(); return ((elemBottom <= docViewBottom) && (elemTop >= docViewTop));}; isScrolledIntoView($('.js-play_button.play_button').get(0))" in document 1) is "false" then
+				my debug("Calling scrollIntoView directly on play button element")
+				do JavaScript "$('.js-play_button.play_button').get(0).scrollIntoView()" in document 1
+				delay 1
+			else
+				set duration to (get current date) - startTime
+				my debug("Play icon is visible - waited for " & duration & " seconds")
+				exit repeat
+			end if
+		end repeat
+	
+	
+		my debug("Get screen coordinates of windowed playback area")
+		-- TODO: Figure out a failsafe way to get playback controls coordinates when player is windowed
+		set menuPos to (do JavaScript "var menuPos = function () { var menuX = window.screenX + $('.js-play_button.play_button')[0].getBoundingClientRect().left; var menuY = window.screenY + window.screen.availTop + (window.screen.height - window.screen.availHeight) + $('.js-play_button.play_button')[0].getBoundingClientRect().top + $('.js-play_button.play_button')[0].getBoundingClientRect().height; return {x: menuX, y: menuY, pageYOffset: $(window).get(0).pageYOffset, width: $('.js-play_button.play_button')[0].getBoundingClientRect().width, height: $('.js-play_button.play_button')[0].getBoundingClientRect().height};}; menuPos();" in document 1)
+	end tell
+
+	set menuPosX to get x of menuPos as integer
+	set menuPosY to get y of menuPos as integer
+	set playerWidth to get width of menuPos as integer
+	set playerHeight to get height of menuPos as integer
+	set pageYOffset to get pageYOffset of menuPos as integer
+	
+	if menuPosX > screenHorizontalRes then
+		my debug("menuPosX greater than screen width")
+	end if
+	if menuPosY > screenVerticalRes then
+		my debug("menuPosY: " & menuPosY & " greater than screen height " & screenVerticalRes & " - pageYOffset: " & pageYOffset)
+	end if
+	
+	my info("Click Play")
+	do shell script quoted form of POSIX path of cliclickPath & " m:" & (menuPosX + 0.5 * playerWidth) & "," & (menuPosY - 0.5 * playerHeight) & " w:300 c:."
+	delay 3 --TODO: figure out a smarter way to wait for flash spinner to disappear and playback to start - javascript event of xhr request completed?
+	
+	
+	-- TODO: Detect what icons are available. Sometimes subtitles icon is not shown, which means the HD icon moves up a position
+	--Play/pause icon is all to the left
+	set playIconLeftOffset to 0.5*controlsIconWidth
+	set volumeIconRightOffset to ((0 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
+	set fullscreenIconRightOffset to ((1 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
+	set subtitlesIconRightOffset to ((2 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer --sometimes not shown, how do we detect this?
+	set hdIconRightOffset to ((3 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
+	
+	set clickPosY to menuPosY - (0.5 * controlsIconHeight) --Screen Y position measured from screen top to center of control icons (windowed mode)
+	
+	set fullscreenIconWindowedX to (menuPosX + playerWidth - fullscreenIconRightOffset) as integer -- 
+	debug("Fullscreen icon X in windowed mode: " & fullscreenIconWindowedX)
+	
+	--Going fullscreen
+	set fullscreen to false
+	tell application "Safari"
+		my info("Going fullscreen")
+		activate
+		delay 2.5
+		--clickPosY uses windowed coordinates at this point
+		do shell script quoted form of POSIX path of cliclickPath & " m:" & fullscreenIconWindowedX & "," & clickPosY & " w:500 c:."
+		set fullscreen to true --TODO: How to verify that fullscreen happened
+	end tell
+	
+	--update clickPosY to accomodate for fullscreen coordinates
+	set clickPosY to screenVerticalRes - (0.5 * controlsIconHeight)
+	delay 1.5
+	
+	tell application "Safari"
+		activate
+		my info("Switching to HD stream")
+		-- Workaround: Some series does not have a subtitles icon - so the HD icon is offset 1 to the right - attempt click in both positions
+		do shell script quoted form of POSIX path of cliclickPath & " c:" & (screenHorizontalRes - subtitlesIconRightOffset) & "," & clickPosY --& " w:200 c:."
+		do shell script quoted form of POSIX path of cliclickPath & " c:" & (screenHorizontalRes - hdIconRightOffset) & "," & clickPosY --& " w:200 c:."
+	end tell
 	
 end run
 
@@ -87,3 +149,11 @@ end GetResolution
 on GetParentPath(theFile)
 	tell application "Finder" to return container of (theFile as alias) as text
 end GetParentPath
+
+on debug(msg)
+	log ("[DEBUG] " & msg)
+end debug
+
+on info(msg)
+	log ("[INFO] " & msg)
+end info
