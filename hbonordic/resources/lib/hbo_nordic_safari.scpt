@@ -58,20 +58,12 @@ on run argv
 			do JavaScript "var doLogin = function() {$('.js-toggle_login_form')[0].click(); $('#login_email')[0].value='" & username & "'; $('#login_password')[0].value='" & userpass & "'; $('#sign_in_form').submit();}; doLogin();" in document 1
 			delay 1
 		end if
-
-	end tell
-	tell application "System Events" to tell process "Safari"
-	    perform action "AXRaise" of window 1
-	end tell
-
-	tell application "Safari"
-		activate
+(*
 		my debug("Wait for browser to scroll to play icon")
 		set startTime to (get current date)
 		repeat
 			if (do JavaScript "var isScrolledIntoView = function(elem) { var docViewTop = $(window).get(0).pageYOffset; var docViewBottom = docViewTop + $(window).height(); var elemTop = $(elem).offset().top; var elemBottom = elemTop + $(elem).height(); return ((elemBottom <= docViewBottom) && (elemTop >= docViewTop));}; isScrolledIntoView($('.js-play_button.play_button').get(0))" in document 1) is "false" then
 				my debug("Calling scrollIntoView directly on play button element")
-				do JavaScript "$('.js-play_button.play_button').get(0).scrollIntoView()" in document 1
 				delay 1
 			else
 				set duration to (get current date) - startTime
@@ -79,11 +71,16 @@ on run argv
 				exit repeat
 			end if
 		end repeat
-	
+*)	
 	
 		my debug("Get screen coordinates of windowed playback area")
+		delay 0.5
+		do JavaScript "$('.js-play_button.play_button').get(0).scrollIntoView()" in document 1
+		delay 0.5
 		-- TODO: Figure out a failsafe way to get playback controls coordinates when player is windowed
 		set menuPos to (do JavaScript "var menuPos = function () { var menuX = window.screenX + $('.js-play_button.play_button')[0].getBoundingClientRect().left; var menuY = window.screenY + window.screen.availTop + (window.screen.height - window.screen.availHeight) + $('.js-play_button.play_button')[0].getBoundingClientRect().top + $('.js-play_button.play_button')[0].getBoundingClientRect().height; return {x: menuX, y: menuY, pageYOffset: $(window).get(0).pageYOffset, width: $('.js-play_button.play_button')[0].getBoundingClientRect().width, height: $('.js-play_button.play_button')[0].getBoundingClientRect().height};}; menuPos();" in document 1)
+		my debug("Playback element - X: " & (get x of menuPos) & ", Y: " & (get y of menuPos) & " (playerWidth: " & (get width of menuPos) & ", playerHeight: " & (get height of menuPos) & ", pageYOffset (scroll distance from page top): " & (get pageYOffset of menuPos) & ")")
+
 	end tell
 
 	set menuPosX to get x of menuPos as integer
@@ -93,10 +90,12 @@ on run argv
 	set pageYOffset to get pageYOffset of menuPos as integer
 	
 	if menuPosX > screenHorizontalRes then
-		my debug("menuPosX greater than screen width")
+		my warn("menuPosX greater than screen width. Script cannot continue")
+		error number -128
 	end if
 	if menuPosY > screenVerticalRes then
-		my debug("menuPosY: " & menuPosY & " greater than screen height " & screenVerticalRes & " - pageYOffset: " & pageYOffset)
+		my warn("menuPosY: " & menuPosY & " greater than screen height " & screenVerticalRes & " - pageYOffset: " & pageYOffset & ". Script cannot continue")
+		error number -128
 	end if
 	
 	my info("Click Play")
@@ -158,3 +157,7 @@ end debug
 on info(msg)
 	log ("[INFO] " & msg)
 end info
+
+on warn(msg)
+	log ("[WARN] " & msg)
+end warn
