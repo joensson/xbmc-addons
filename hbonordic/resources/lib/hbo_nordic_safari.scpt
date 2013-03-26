@@ -40,7 +40,7 @@ on run argv
         	set index to 1
 	    end tell
     	set URL of document 1 to episodeUrl
---		set the URL of the front document to episodeUrl
+
 		delay 2 --TODO: Is there an event we can check to see when Safari starts loading the new URL. If we check document.readyState too soon the 'old' page will return complete and the script will continue before the new page is loaded
 
 		my debug("Waiting for Safari to finish loading episode URL")
@@ -56,31 +56,15 @@ on run argv
 		if (do JavaScript "$('.js-toggle_login_form').length" in document 1) is 1 then
 			my debug("Logging in")
 			do JavaScript "var doLogin = function() {$('.js-toggle_login_form')[0].click(); $('#login_email')[0].value='" & username & "'; $('#login_password')[0].value='" & userpass & "'; $('#sign_in_form').submit();}; doLogin();" in document 1
-			delay 1
+			delay 1.5
 		end if
-(*
-		my debug("Wait for browser to scroll to play icon")
-		set startTime to (get current date)
-		repeat
-			if (do JavaScript "var isScrolledIntoView = function(elem) { var docViewTop = $(window).get(0).pageYOffset; var docViewBottom = docViewTop + $(window).height(); var elemTop = $(elem).offset().top; var elemBottom = elemTop + $(elem).height(); return ((elemBottom <= docViewBottom) && (elemTop >= docViewTop));}; isScrolledIntoView($('.js-play_button.play_button').get(0))" in document 1) is "false" then
-				my debug("Calling scrollIntoView directly on play button element")
-				delay 1
-			else
-				set duration to (get current date) - startTime
-				my debug("Play icon is visible - waited for " & duration & " seconds")
-				exit repeat
-			end if
-		end repeat
-*)	
 	
 		my debug("Get screen coordinates of windowed playback area")
-		delay 0.5
-		do JavaScript "$('.js-play_button.play_button').get(0).scrollIntoView()" in document 1
-		delay 0.5
+		delay 1
 		-- TODO: Figure out a failsafe way to get playback controls coordinates when player is windowed
-		set menuPos to (do JavaScript "var menuPos = function () { var menuX = window.screenX + $('.js-play_button.play_button')[0].getBoundingClientRect().left; var menuY = window.screenY + window.screen.availTop + (window.screen.height - window.screen.availHeight) + $('.js-play_button.play_button')[0].getBoundingClientRect().top + $('.js-play_button.play_button')[0].getBoundingClientRect().height; return {x: menuX, y: menuY, pageYOffset: $(window).get(0).pageYOffset, width: $('.js-play_button.play_button')[0].getBoundingClientRect().width, height: $('.js-play_button.play_button')[0].getBoundingClientRect().height};}; menuPos();" in document 1)
+--		set menuPos to (do JavaScript "function findPos(obj) { var curleft = curtop = 0; if (obj.offsetParent) { do { curleft += obj.offsetLeft; curtop += obj.offsetTop;} while (obj = obj.offsetParent);}curtop += window.screenY+26curleft += window.screenLeftreturn [curleft,curtop];}; var menuPos = function () { var divPos=findPos($(\"div.js-play_button.play_button.pointer.absolute.topleft.z_10.full_width.full_height.transition_fade.no_select\")[0]); return {x: divPos[0], y: divPos[1], pageYOffset: $(window).get(0).pageYOffset, width: $(\"div.js-play_button.play_button.pointer.absolute.topleft.z_10.full_width.full_height.transition_fade.no_select\")[0].getBoundingClientRect().width, height: $(\"div.js-play_button.play_button.pointer.absolute.topleft.z_10.full_width.full_height.transition_fade.no_select\")[0].getBoundingClientRect().height};}; menuPos();" in document 1)
+		set menuPos to (do JavaScript "function getPosition(element) {var xPosition = 0;var yPosition = 0;while(element) {xPosition += (element.offsetLeft - element.scrollLeft + element.clientLeft);yPosition += (element.offsetTop - element.scrollTop + element.clientTop);element = element.offsetParent;}return { x: xPosition, y: yPosition };};var myPos = function () {var elem = $(\"div.js-play_button.play_button.pointer.absolute.topleft.z_10.full_width.full_height.transition_fade.no_select\")[0]; var pos = getPosition(elem); var boundingClientRect = elem.getBoundingClientRect();return {x: pos.x, y: pos.y+boundingClientRect.height+94+22, pageYOffset: $(window).get(0).pageYOffset, width: boundingClientRect.width, height: boundingClientRect.height};}; myPos();" in document 1)
 		my debug("Playback element - X: " & (get x of menuPos) & ", Y: " & (get y of menuPos) & " (playerWidth: " & (get width of menuPos) & ", playerHeight: " & (get height of menuPos) & ", pageYOffset (scroll distance from page top): " & (get pageYOffset of menuPos) & ")")
-
 	end tell
 
 	set menuPosX to get x of menuPos as integer
@@ -94,8 +78,14 @@ on run argv
 		error number -128
 	end if
 	if menuPosY > screenVerticalRes then
-		my warn("menuPosY: " & menuPosY & " greater than screen height " & screenVerticalRes & " - pageYOffset: " & pageYOffset & ". Script cannot continue")
-		error number -128
+		if pageYOffset > 0 then
+			menuPosY = menuPosY - pageYOffset
+			my debug("menuPosY > screenheight, adjusted menuPosY to " & menuPosY)
+		end if
+		if menuPosY > screenVerticalRes then
+			my warn("menuPosY: " & menuPosY & " greater than screen height " & screenVerticalRes & " - pageYOffset: " & pageYOffset & ". Script cannot continue")
+			error number -128
+		end if
 	end if
 	
 	my info("Click Play")
@@ -112,9 +102,9 @@ on run argv
 	set hdIconRightOffset to ((3 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
 	
 	set clickPosY to menuPosY - (0.5 * controlsIconHeight) --Screen Y position measured from screen top to center of control icons (windowed mode)
-	
 	set fullscreenIconWindowedX to (menuPosX + playerWidth - fullscreenIconRightOffset) as integer -- 
-	debug("Fullscreen icon X in windowed mode: " & fullscreenIconWindowedX)
+		
+	debug("Fullscreen-icon x,y in windowed mode: (" & fullscreenIconWindowedX & ", " & clickPosY & ")")
 	
 	--Going fullscreen
 	set fullscreen to false
