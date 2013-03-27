@@ -27,27 +27,38 @@ on run argv
 	tell application "Safari"
 		reopen
 		set hboNordicTabTitle to "HBO Nordic" as string
-	    close (every tab of window 1 whose name is equal to hboNordicTabTitle)
+		close (every tab of window 1 whose name is equal to hboNordicTabTitle)
 	end tell
 	delay 1
 	
 	-- wait for the page to be ready before executing rest of script
 	tell application "Safari"
 		reopen
+		
+		tell (window 1 where (its document is not missing value))
+			if name of its document is not "Untitled" then set current tab to (make new tab)
+			set index to 1
+		end tell
+		set URL of document 1 to episodeUrl
+		
 		activate
-	    tell (window 1 where (its document is not missing value))
-    	    if name of its document is not "Untitled" then set current tab to (make new tab)
-        	set index to 1
-	    end tell
-    	set URL of document 1 to episodeUrl
-
-		delay 2 --TODO: Is there an event we can check to see when Safari starts loading the new URL. If we check document.readyState too soon the 'old' page will return complete and the script will continue before the new page is loaded
-
+		
+		--If on a slow network it can take some time before Safari resolves DNS etc and starts loading the url
+		my debug("Waiting for Safari to begin loading episode URL")
+		set startTime to (get current date)
+		repeat
+			set props to (get properties of document 1)
+			if ((get URL of props is episodeUrl) and (get name of props is not "Untitled")) then exit repeat
+			delay 0.5
+		end repeat
+		set duration to (get current date) - startTime
+		my debug("Waited " & duration & " seconds for Safari to begin loading document")
+		
 		my debug("Waiting for Safari to finish loading episode URL")
 		set startTime to (get current date)
 		repeat
 			if (do JavaScript "document.readyState" in document 1) is "complete" then exit repeat
-			delay 1
+			delay 0.5
 		end repeat
 		set duration to (get current date) - startTime
 		my debug("Waited " & duration & " seconds for readyState to be 'complete'")
@@ -58,15 +69,15 @@ on run argv
 			do JavaScript "var doLogin = function() {$('.js-toggle_login_form')[0].click(); $('#login_email')[0].value='" & username & "'; $('#login_password')[0].value='" & userpass & "'; $('#sign_in_form').submit();}; doLogin();" in document 1
 			delay 1.5
 		end if
-	
+		
 		my debug("Get screen coordinates of windowed playback area")
 		delay 1
 		-- TODO: Figure out a failsafe way to get playback controls coordinates when player is windowed
---		set menuPos to (do JavaScript "function findPos(obj) { var curleft = curtop = 0; if (obj.offsetParent) { do { curleft += obj.offsetLeft; curtop += obj.offsetTop;} while (obj = obj.offsetParent);}curtop += window.screenY+26curleft += window.screenLeftreturn [curleft,curtop];}; var menuPos = function () { var divPos=findPos($(\"div.js-play_button.play_button.pointer.absolute.topleft.z_10.full_width.full_height.transition_fade.no_select\")[0]); return {x: divPos[0], y: divPos[1], pageYOffset: $(window).get(0).pageYOffset, width: $(\"div.js-play_button.play_button.pointer.absolute.topleft.z_10.full_width.full_height.transition_fade.no_select\")[0].getBoundingClientRect().width, height: $(\"div.js-play_button.play_button.pointer.absolute.topleft.z_10.full_width.full_height.transition_fade.no_select\")[0].getBoundingClientRect().height};}; menuPos();" in document 1)
+		--		set menuPos to (do JavaScript "function findPos(obj) { var curleft = curtop = 0; if (obj.offsetParent) { do { curleft += obj.offsetLeft; curtop += obj.offsetTop;} while (obj = obj.offsetParent);}curtop += window.screenY+26curleft += window.screenLeftreturn [curleft,curtop];}; var menuPos = function () { var divPos=findPos($(\"div.js-play_button.play_button.pointer.absolute.topleft.z_10.full_width.full_height.transition_fade.no_select\")[0]); return {x: divPos[0], y: divPos[1], pageYOffset: $(window).get(0).pageYOffset, width: $(\"div.js-play_button.play_button.pointer.absolute.topleft.z_10.full_width.full_height.transition_fade.no_select\")[0].getBoundingClientRect().width, height: $(\"div.js-play_button.play_button.pointer.absolute.topleft.z_10.full_width.full_height.transition_fade.no_select\")[0].getBoundingClientRect().height};}; menuPos();" in document 1)
 		set menuPos to (do JavaScript "function getPosition(element) {var xPosition = 0;var yPosition = 0;while(element) {xPosition += (element.offsetLeft - element.scrollLeft + element.clientLeft);yPosition += (element.offsetTop - element.scrollTop + element.clientTop);element = element.offsetParent;}return { x: xPosition, y: yPosition };};var myPos = function () {var elem = $(\"div.js-play_button.play_button.pointer.absolute.topleft.z_10.full_width.full_height.transition_fade.no_select\")[0]; var pos = getPosition(elem); var boundingClientRect = elem.getBoundingClientRect();return {x: pos.x, y: pos.y+boundingClientRect.height+94+22, pageYOffset: $(window).get(0).pageYOffset, width: boundingClientRect.width, height: boundingClientRect.height};}; myPos();" in document 1)
 		my debug("Playback element - X: " & (get x of menuPos) & ", Y: " & (get y of menuPos) & " (playerWidth: " & (get width of menuPos) & ", playerHeight: " & (get height of menuPos) & ", pageYOffset (scroll distance from page top): " & (get pageYOffset of menuPos) & ")")
 	end tell
-
+	
 	set menuPosX to get x of menuPos as integer
 	set menuPosY to get y of menuPos as integer
 	set playerWidth to get width of menuPos as integer
@@ -95,7 +106,7 @@ on run argv
 	
 	-- TODO: Detect what icons are available. Sometimes subtitles icon is not shown, which means the HD icon moves up a position
 	--Play/pause icon is all to the left
-	set playIconLeftOffset to 0.5*controlsIconWidth
+	set playIconLeftOffset to 0.5 * controlsIconWidth
 	set volumeIconRightOffset to ((0 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
 	set fullscreenIconRightOffset to ((1 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer
 	set subtitlesIconRightOffset to ((2 * (controlsIconWidth + controlsVerticalDelimiter)) + (0.5 * controlsIconWidth)) as integer --sometimes not shown, how do we detect this?
@@ -103,7 +114,7 @@ on run argv
 	
 	set clickPosY to menuPosY - (0.5 * controlsIconHeight) --Screen Y position measured from screen top to center of control icons (windowed mode)
 	set fullscreenIconWindowedX to (menuPosX + playerWidth - fullscreenIconRightOffset) as integer -- 
-		
+	
 	debug("Fullscreen-icon x,y in windowed mode: (" & fullscreenIconWindowedX & ", " & clickPosY & ")")
 	
 	--Going fullscreen
@@ -130,6 +141,7 @@ on run argv
 		do shell script quoted form of POSIX path of cliclickPath & " m:" & (screenHorizontalRes - hdIconRightOffset) & "," & clickPosY & " w:100 c:."
 	end tell
 	
+	my info("Script completed")
 end run
 
 on GetResolution()
